@@ -498,7 +498,12 @@ def api_schedules_update(schedule_id: str, payload: dict) -> dict:
 
         logger.info(f"Agenda atualizada: {schedule_id}")
         return {"ok": True}
+    except ValueError as exc:
+        if "não encontrada" in str(exc):
+            raise HTTPException(404, str(exc))
+        raise HTTPException(400, str(exc))
     except Exception as exc:
+        logger.exception(f"Erro ao atualizar agenda {schedule_id}")
         raise HTTPException(500, f"Erro ao atualizar agenda: {exc}")
 
 

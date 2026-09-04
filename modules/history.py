@@ -215,6 +215,16 @@ def update_schedule(
     db = _database()
     from bson.objectid import ObjectId
 
+    # Valida que a agenda existe
+    try:
+        doc = db.schedules.find_one({"_id": ObjectId(schedule_id)})
+        if not doc:
+            raise ValueError(f"Agenda '{schedule_id}' não encontrada")
+    except Exception as exc:
+        if "not a valid ObjectId" in str(exc):
+            raise ValueError(f"ID de agenda inválido: {schedule_id}")
+        raise exc
+
     updates = {}
     if hour is not None:
         updates["hour"] = hour
@@ -222,9 +232,11 @@ def update_schedule(
         updates["minute"] = minute
     if days is not None:
         updates["days"] = days
-        # Regenera expressão cron
+        # Regenera expressão cron com valores atuais ou novos
+        new_hour = hour if hour is not None else doc.get("hour", 0)
+        new_minute = minute if minute is not None else doc.get("minute", 0)
         cron_days = ",".join(str((d + 1) % 7) for d in days) if days else "*"
-        updates["cron_expression"] = f"{minute or 0} {hour or 0} * * {cron_days}"
+        updates["cron_expression"] = f"{new_minute} {new_hour} * * {cron_days}"
     if enabled is not None:
         updates["enabled"] = enabled
 
