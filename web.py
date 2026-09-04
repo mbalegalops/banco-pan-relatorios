@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 import modules.history as history
 import modules.storage as storage
+import modules.scheduler as scheduler_module
 from pipeline import executar
 from modules.browser import SessaoElaw
 from modules.cancel import ExecucaoCancelada
@@ -111,6 +112,7 @@ class ServerState:
 
 
 state = ServerState()
+scheduler: Optional[scheduler_module.Scheduler] = None
 
 app = FastAPI(title="Relatórios · Pan")
 
@@ -421,6 +423,101 @@ def api_retentar(run_id: int, nome_relatorio: str) -> dict:
     return {"ok": True, "status": "retrying"}
 
 
+# ------------------------------------------------------------------- Agendas
+
+@app.get("/api/schedules")
+def api_schedules_list() -> dict:
+    """Retorna lista de agendamentos."""
+    schedules = history.list_schedules()
+    return {"schedules": schedules}
+
+
+@app.post("/api/schedules")
+def api_schedules_create(payload: dict) -> dict:
+    """Cria novo agendamento.
+
+    Esperado:
+    {
+      "name": "Relatórios 8h",
+      "cron_expression": "0 8 * * *",
+      "description": "Executa às 8h todo dia"
+    }
+    """
+    name = (payload.get("name") or "").strip()
+    cron_expression = (payload.get("cron_expression") or "").strip()
+    description = (payload.get("description") or "").strip()
+
+    if not name:
+        raise HTTPException(400, "Nome é obrigatório")
+    if not cron_expression:
+        raise HTTPException(400, "Expressão cron é obrigatória")
+
+    try:
+        schedule_id = history.create_schedule(name, cron_expression, description, enabled=True)
+        if scheduler:
+            scheduler.add_schedule(schedule_id, name, cron_expression, enabled=True)
+        logger.info(f"Agenda criada: {schedule_id}")
+        return {"ok": True, "schedule_id": schedule_id}
+    except ValueError as exc:
+        raise HTTPException(400, f"Expressão cron inválida: {exc}")
+    except Exception as exc:
+        raise HTTPException(500, f"Erro ao criar agenda: {exc}")
+
+
+@app.put("/api/schedules/{schedule_id}")
+def api_schedules_update(schedule_id: str, payload: dict) -> dict:
+    """Atualiza agendamento existente."""
+    try:
+        name = payload.get("name")
+        description = payload.get("description")
+        cron_expression = payload.get("cron_expression")
+        enabled = payload.get("enabled")
+
+        history.update_schedule(
+            schedule_id,
+            name=name,
+            description=description,
+            cron_expression=cron_expression,
+            enabled=enabled,
+        )
+
+        if scheduler and cron_expression is not None:
+            scheduler.update_schedule(schedule_id, cron_expression=cron_expression, enabled=enabled)
+
+        logger.info(f"Agenda atualizada: {schedule_id}")
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(500, f"Erro ao atualizar agenda: {exc}")
+
+
+@app.delete("/api/schedules/{schedule_id}")
+def api_schedules_delete(schedule_id: str) -> dict:
+    """Deleta agendamento."""
+    try:
+        history.delete_schedule(schedule_id)
+        if scheduler:
+            scheduler.remove_schedule(schedule_id)
+        logger.info(f"Agenda deletada: {schedule_id}")
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(500, f"Erro ao deletar agenda: {exc}")
+
+
+@app.post("/api/schedules/{schedule_id}/run")
+def api_schedules_run_now(schedule_id: str) -> dict:
+    """Executa agenda imediatamente (sem esperar agendamento)."""
+    with state.lock:
+        if state.worker_thread is not None:
+            raise HTTPException(409, "Uma execução já está em andamento.")
+
+    schedule = history.get_schedule(schedule_id)
+    if not schedule:
+        raise HTTPException(404, "Agenda não encontrada.")
+
+    logger.info(f"Executando agenda imediatamente: {schedule_id}")
+    return _start_run()
+
+
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket) -> None:
     import asyncio
@@ -469,8 +566,19 @@ def _find_free_port() -> int:
 
 def main() -> None:
     import uvicorn
+    from dotenv import dotenv_values
+
+    global scheduler
 
     history.init_db()
+
+    mongo_uri = dotenv_values(APP_DIR / ".env").get("MONGO_URI")
+    if mongo_uri:
+        try:
+            scheduler = scheduler_module.Scheduler(mongo_uri)
+            scheduler.start()
+        except Exception as exc:
+            logger.error(f"Erro ao inicializar scheduler: {exc}")
 
     port = _find_free_port()
     url = f"http://127.0.0.1:{port}/"
@@ -487,7 +595,11 @@ def main() -> None:
     # dictConfig, virando "ValueError: Unable to configure formatter
     # 'default'"). Sem log_config o uvicorn não mexe no logging - ele
     # continua saindo pelo `logging.basicConfig` já configurado acima.
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", log_config=None)
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", log_config=None)
+    finally:
+        if scheduler:
+            scheduler.stop()
 
 
 if __name__ == "__main__":
