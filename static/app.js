@@ -36,6 +36,7 @@
   const credError = el("credError");
   const credSalvar = el("credSalvar");
   const credCancelar = el("credCancelar");
+  const btnToggleSenha = el("btnToggleSenha");
 
   let execucoes = [];
   let selectedId = null;
@@ -238,6 +239,17 @@
   }
 
   credCancelar.onclick = () => closeModal();
+
+  btnToggleSenha.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (credSenha.type === "password") {
+      credSenha.type = "text";
+      btnToggleSenha.textContent = "🔓";
+    } else {
+      credSenha.type = "password";
+      btnToggleSenha.textContent = "👁";
+    }
+  });
 
   credSalvar.onclick = () => {
     const email = credEmail.value.trim();
