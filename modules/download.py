@@ -141,7 +141,7 @@ def aguardar_e_baixar_relatorios(
 
     pendentes = dict(relatorio_ids)
     baixados: dict[str, str] = {}
-    falhados: dict[str, str] = {}
+    falhados_download: dict[str, str] = {}  # {nome: erro_mensagem}
     page_ref = [page]
 
     start_time = time.monotonic()
@@ -175,7 +175,7 @@ def aguardar_e_baixar_relatorios(
                     emit_report(on_report, nome, "downloaded", chave_s3)
                 except Exception as exc:
                     logger.error(f"Erro ao baixar relatório '{nome}': {exc}")
-                    falhados[nome] = str(exc)
+                    falhados_download[nome] = str(exc)
                     emit_report(on_report, nome, "error")
                 del pendentes[nome]
             else:
@@ -184,19 +184,20 @@ def aguardar_e_baixar_relatorios(
         if pendentes:
             page_ref[0].wait_for_timeout(POLL_INTERVAL_MS)
 
+    # Relatórios que não ficaram prontos no tempo limite (timeout)
     if pendentes:
         faltantes = ", ".join(f"{nome} (ID {rid})" for nome, rid in pendentes.items())
         logger.error(f"Relatório(s) não terminaram de processar em até {POLL_TIMEOUT}s: {faltantes}")
         for nome in pendentes:
             emit_report(on_report, nome, "error")
-            falhados[nome] = f"Timeout após {POLL_TIMEOUT}s"
+            falhados_download[nome] = f"Timeout após {POLL_TIMEOUT}s"
 
-    if falhados:
-        logger.warning(f"Relatórios com erro: {', '.join(falhados.keys())}")
+    if falhados_download:
+        logger.warning(f"Relatórios com erro: {', '.join(falhados_download.keys())}")
 
-    # Retorna também os relatórios que falharam no download (com seus IDs)
+    # Retorna também os relatórios que falharam (com seus IDs do elaw)
     # para possibilitar retry posterior
-    falhados_com_id = {nome: relatorio_ids[nome] for nome in list(pendentes.keys()) if nome in relatorio_ids}
+    falhados_com_id = {nome: relatorio_ids[nome] for nome in falhados_download.keys() if nome in relatorio_ids}
 
     return baixados, falhados_com_id, page_ref[0]
 
