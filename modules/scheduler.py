@@ -6,7 +6,7 @@ from typing import Callable, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.mongodb import MongoDBJobStore
-from apscheduler.executors.threadpool import ThreadPoolExecutor
+from apscheduler.executors.pool import ThreadPoolExecutor
 from pytz import timezone
 
 import modules.history as history
