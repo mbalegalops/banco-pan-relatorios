@@ -152,7 +152,7 @@ def _worker(run_id: int, cancel_event: threading.Event) -> None:
     downloads: dict[str, str] = {}
     try:
         downloads = executar(
-            on_report=on_report, cancel_event=cancel_event, on_sessao=on_sessao,
+            on_report=on_report, cancel_event=cancel_event, on_sessao=on_sessao, run_id=run_id,
         )
     except ExecucaoCancelada:
         cancelado = True
@@ -353,6 +353,72 @@ def api_credenciais_post(payload: dict) -> dict:
         raise HTTPException(400, "Preencha a senha.")
     salvar_credenciais(email, senha)
     return {"ok": True}
+
+
+def _retry_worker(run_id: int, nome_relatorio: str, relatorio_id: str) -> None:
+    """Worker thread para fazer retry de um relatório que falhou."""
+    from modules.login import LoginConfig
+    from playwright.sync_api import sync_playwright
+
+    import modules.download as download
+    from modules.browser import SessaoElaw
+
+    log_path = LOGS_DIR / f"{run_id}_retry_{nome_relatorio.replace(' ', '_')}.log"
+    handler = _RunLogHandler(log_path, state)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(handler)
+
+    try:
+        logger.info(f"Iniciando retry de '{nome_relatorio}' (ID {relatorio_id}) para execução #{run_id}...")
+        config = LoginConfig.from_env()
+        pasta = storage.pasta_do_dia()
+
+        with sync_playwright() as p:
+            sessao = SessaoElaw(p, config)
+            try:
+                chave_s3 = download.fazer_download_relatorio_individual(
+                    sessao.page, nome_relatorio, relatorio_id, pasta, sessao.recover,
+                )
+                if chave_s3:
+                    history.registrar_download(run_id, nome_relatorio, chave_s3)
+                    history.remover_relatorio_falhado(run_id, nome_relatorio)
+                    logger.info(f"Retry bem-sucedido: '{nome_relatorio}' salvo em S3")
+                else:
+                    logger.error(f"Retry falhou: '{nome_relatorio}' não pôde ser baixado")
+            finally:
+                sessao.close()
+    except Exception as exc:
+        logger.exception(f"Erro durante retry de '{nome_relatorio}': {exc}")
+    finally:
+        root_logger.removeHandler(handler)
+        handler.close()
+
+
+@app.post("/api/retentar/{run_id}/{nome_relatorio}")
+def api_retentar(run_id: int, nome_relatorio: str) -> dict:
+    """Tenta fazer download de um relatório que falhou anteriormente."""
+    with state.lock:
+        running = state.worker_thread is not None
+
+    if running:
+        raise HTTPException(409, "Uma execução já está em andamento. Aguarde terminar para retentar um relatório.")
+
+    run = history.get_run(run_id)
+    if run is None:
+        raise HTTPException(404, "Execução não encontrada.")
+
+    failed_reports = run.get("failed_reports") or {}
+    if nome_relatorio not in failed_reports:
+        raise HTTPException(404, f"Relatório '{nome_relatorio}' não está marcado como falhado nessa execução.")
+
+    relatorio_id = failed_reports[nome_relatorio]
+
+    logger.info(f"Iniciando retry para '{nome_relatorio}' (ID {relatorio_id}) da execução #{run_id}")
+
+    thread = threading.Thread(target=_retry_worker, args=(run_id, nome_relatorio, relatorio_id), daemon=True)
+    thread.start()
+
+    return {"ok": True, "status": "retrying"}
 
 
 @app.websocket("/ws")

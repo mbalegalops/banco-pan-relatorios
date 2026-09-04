@@ -9,6 +9,7 @@ from typing import Callable
 
 from playwright.sync_api import Page
 
+import modules.sharepoint as sharepoint
 import modules.storage as storage
 from modules.cancel import checar_cancelamento
 from modules.elaw import REPORT_FILE_PREFIXES
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 REPORT_LIST_URL = "https://bancopan.elaw.com.br/userProcessoReportTmpList.elaw?faces-redirect=true"
 
-POLL_TIMEOUT = 3600
+POLL_TIMEOUT = 10800  # 3 horas
 POLL_INTERVAL_MS = 60000
 POLL_MAX_ATTEMPTS = 3
 POLL_RETRY_DELAY = 2.0
@@ -115,6 +116,9 @@ def _baixar_relatorio(page: Page, nome_relatorio: str, clip_selector: str, pasta
     download.save_as(str(caminho_temp))
 
     chave_s3 = storage.enviar_relatorio(caminho_temp, pasta)
+
+    sharepoint.enviar_relatorio_sharepoint(caminho_temp, pasta)
+
     caminho_temp.unlink(missing_ok=True)
     logger.info(f"Relatório '{nome_relatorio}' salvo em s3://{storage.S3_BUCKET}/{chave_s3}")
     return chave_s3
@@ -127,15 +131,17 @@ def aguardar_e_baixar_relatorios(
     pasta: str,
     on_report: OnReport = None,
     cancel_event: threading.Event | None = None,
-) -> tuple[dict[str, str], Page]:
+) -> tuple[dict[str, str], dict[str, str], Page]:
     """Faz polling e baixa cada relatório assim que ele ficar pronto, sem
-    esperar os demais. Retorna um dict {nome_relatorio: chave_s3} e a
-    página (possivelmente recriada) em uso."""
+    esperar os demais. Retorna um dict {nome_relatorio: chave_s3}, um dict
+    com os relatórios que falharam {nome: id}, e a página (possivelmente
+    recriada) em uso."""
     logger.info("Navegando para a lista de relatórios...")
     page.goto(REPORT_LIST_URL, wait_until="domcontentloaded")
 
     pendentes = dict(relatorio_ids)
     baixados: dict[str, str] = {}
+    falhados: dict[str, str] = {}
     page_ref = [page]
 
     start_time = time.monotonic()
@@ -163,9 +169,14 @@ def aguardar_e_baixar_relatorios(
             if page_ref[0].locator(clip).count() > 0:
                 logger.info(f"Relatório '{nome}' (ID {relatorio_id}) pronto para download.")
                 emit_report(on_report, nome, "ready")
-                chave_s3 = _baixar_relatorio(page_ref[0], nome, clip, pasta)
-                baixados[nome] = chave_s3
-                emit_report(on_report, nome, "downloaded", chave_s3)
+                try:
+                    chave_s3 = _baixar_relatorio(page_ref[0], nome, clip, pasta)
+                    baixados[nome] = chave_s3
+                    emit_report(on_report, nome, "downloaded", chave_s3)
+                except Exception as exc:
+                    logger.error(f"Erro ao baixar relatório '{nome}': {exc}")
+                    falhados[nome] = str(exc)
+                    emit_report(on_report, nome, "error")
                 del pendentes[nome]
             else:
                 logger.info(f"Relatório '{nome}' (ID {relatorio_id}) ainda em processamento.")
@@ -175,6 +186,80 @@ def aguardar_e_baixar_relatorios(
 
     if pendentes:
         faltantes = ", ".join(f"{nome} (ID {rid})" for nome, rid in pendentes.items())
-        raise TimeoutError(f"Relatório(s) não terminaram de processar em até {POLL_TIMEOUT}s: {faltantes}")
+        logger.error(f"Relatório(s) não terminaram de processar em até {POLL_TIMEOUT}s: {faltantes}")
+        for nome in pendentes:
+            emit_report(on_report, nome, "error")
+            falhados[nome] = f"Timeout após {POLL_TIMEOUT}s"
 
-    return baixados, page_ref[0]
+    if falhados:
+        logger.warning(f"Relatórios com erro: {', '.join(falhados.keys())}")
+
+    # Retorna também os relatórios que falharam no download (com seus IDs)
+    # para possibilitar retry posterior
+    falhados_com_id = {nome: relatorio_ids[nome] for nome in list(pendentes.keys()) if nome in relatorio_ids}
+
+    return baixados, falhados_com_id, page_ref[0]
+
+
+def fazer_download_relatorio_individual(
+    page: Page,
+    nome_relatorio: str,
+    relatorio_id: str,
+    pasta: str,
+    recover: Callable[[], Page],
+    on_report: OnReport = None,
+) -> str | None:
+    """Tenta fazer download de um único relatório que falhou anteriormente.
+
+    Retorna a chave S3 se sucesso, ou None se falhar."""
+    logger.info(f"Iniciando retry de download para '{nome_relatorio}' (ID {relatorio_id})...")
+    emit_report(on_report, nome_relatorio, "retrying")
+
+    page_ref = [page]
+    start_time = time.monotonic()
+
+    while time.monotonic() - start_time < POLL_TIMEOUT:
+        try:
+            page_ref[0].goto(REPORT_LIST_URL, wait_until="domcontentloaded")
+        except Exception as exc:
+            logger.warning(f"Erro ao navegar para página de relatórios: {exc}. Reabrindo navegador...")
+            page_ref[0] = recover()
+            continue
+
+        for tentativa in range(1, POLL_MAX_ATTEMPTS + 1):
+            try:
+                page_ref[0].locator('//*[@id="btnPesquisar"]').click()
+                page_ref[0].wait_for_selector("#tableProcessoReportTmp_data", timeout=10000)
+                break
+            except Exception as exc:
+                if tentativa == POLL_MAX_ATTEMPTS:
+                    logger.warning(
+                        f"Erro persistente ao atualizar a lista de relatórios: {exc}. "
+                        "Reabrindo navegador, refazendo login e voltando à página de relatórios..."
+                    )
+                    page_ref[0] = recover()
+                else:
+                    logger.warning(f"Erro temporário ao atualizar lista ({tentativa}/{POLL_MAX_ATTEMPTS}): {exc}")
+                    time.sleep(POLL_RETRY_DELAY)
+
+        clip = _clip_selector(relatorio_id)
+        if page_ref[0].locator(clip).count() > 0:
+            logger.info(f"Relatório '{nome_relatorio}' (ID {relatorio_id}) pronto para download (retry).")
+            emit_report(on_report, nome_relatorio, "ready")
+            try:
+                chave_s3 = _baixar_relatorio(page_ref[0], nome_relatorio, clip, pasta)
+                emit_report(on_report, nome_relatorio, "downloaded", chave_s3)
+                logger.info(f"Retry bem-sucedido para '{nome_relatorio}'")
+                return chave_s3
+            except Exception as exc:
+                logger.error(f"Erro ao baixar '{nome_relatorio}' durante retry: {exc}")
+                emit_report(on_report, nome_relatorio, "error")
+                return None
+        else:
+            logger.info(f"Relatório '{nome_relatorio}' (ID {relatorio_id}) ainda em processamento (retry).")
+
+        page_ref[0].wait_for_timeout(POLL_INTERVAL_MS)
+
+    logger.error(f"Timeout ao fazer retry de '{nome_relatorio}' após {POLL_TIMEOUT}s")
+    emit_report(on_report, nome_relatorio, "error")
+    return None

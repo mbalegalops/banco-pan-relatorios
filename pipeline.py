@@ -25,6 +25,7 @@ def executar(
     on_report: OnReport = None,
     cancel_event: Optional[threading.Event] = None,
     on_sessao: Optional[Callable[[SessaoElaw], None]] = None,
+    run_id: Optional[int] = None,
 ) -> dict[str, str]:
     """Executa o pipeline completo (login, pesquisa, exportação e upload
     dos relatórios pro S3) e retorna {nome_relatorio: chave_s3}.
@@ -68,6 +69,7 @@ def executar(
             return pesquisar(
                 sessao.page, sessao.recover, pasta, existentes,
                 on_step=on_step, on_report=on_report, cancel_event=cancel_event,
+                run_id=run_id,
             )
         finally:
             sessao.close()

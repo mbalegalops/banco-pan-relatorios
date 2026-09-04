@@ -7,6 +7,7 @@ from typing import Callable, Optional
 
 from playwright.sync_api import Page
 
+import modules.history as history
 from modules.cancel import checar_cancelamento
 from modules.download import aguardar_e_baixar_relatorios, detectar_relatorios_em_processamento
 from modules.elaw import (
@@ -31,6 +32,7 @@ def pesquisar(
     on_step: OnStep = None,
     on_report: OnReport = None,
     cancel_event: Optional[threading.Event] = None,
+    run_id: Optional[int] = None,
 ) -> dict[str, str]:
     """Aplica os filtros de status, pesquisa, exporta os relatórios
     "DADOS DO PROCESSO", "ESCRITÓRIO - TAREFAS" e "PAUTA GERAL", aguarda
@@ -88,22 +90,37 @@ def pesquisar(
         emit_step(on_step, "pesquisa", "skipped")
 
     emit_step(on_step, "exportacao", "running")
+    falhas_exportacao = []
     for nome in pendentes_geral:
         checar_cancelamento(cancel_event)
-        emit_report(on_report, nome, "waiting")
-        relatorio_ids[nome] = exportar_para_excel(page, nome)
+        try:
+            emit_report(on_report, nome, "waiting")
+            relatorio_ids[nome] = exportar_para_excel(page, nome)
+        except Exception as exc:
+            logger.error(f"Erro ao exportar '{nome}': {exc}")
+            emit_report(on_report, nome, "error")
+            falhas_exportacao.append(nome)
     if pauta_pendente:
         checar_cancelamento(cancel_event)
-        emit_report(on_report, PAUTA_GERAL_NOME, "waiting")
-        relatorio_ids[PAUTA_GERAL_NOME] = exportar_pauta_geral(page)
+        try:
+            emit_report(on_report, PAUTA_GERAL_NOME, "waiting")
+            relatorio_ids[PAUTA_GERAL_NOME] = exportar_pauta_geral(page)
+        except Exception as exc:
+            logger.error(f"Erro ao exportar '{PAUTA_GERAL_NOME}': {exc}")
+            emit_report(on_report, PAUTA_GERAL_NOME, "error")
+            falhas_exportacao.append(PAUTA_GERAL_NOME)
     emit_step(on_step, "exportacao", "done")
 
     checar_cancelamento(cancel_event)
     emit_step(on_step, "aguardar", "running")
     emit_step(on_step, "download", "running")
-    baixados, page = aguardar_e_baixar_relatorios(
+    baixados, falhados_download, page = aguardar_e_baixar_relatorios(
         page, relatorio_ids, recover, pasta, on_report, cancel_event=cancel_event)
     emit_step(on_step, "aguardar", "done")
     emit_step(on_step, "download", "done")
+
+    if run_id is not None:
+        for nome_rel, id_rel in falhados_download.items():
+            history.registrar_relatorio_falhado(run_id, nome_rel, id_rel)
 
     return {**existentes, **baixados}

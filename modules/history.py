@@ -113,6 +113,26 @@ def registrar_log(run_id: int, chave_s3: str) -> None:
     )
 
 
+def registrar_relatorio_falhado(run_id: int, nome_relatorio: str, relatorio_id: str) -> None:
+    """Registra um relatório que falhou no download, armazenando seu ID para
+    possibilitar retry posterior."""
+    db = _database()
+    db.runs.update_one(
+        {"_id": run_id},
+        {"$set": {f"failed_reports.{nome_relatorio}": relatorio_id}},
+        upsert=False,
+    )
+
+
+def remover_relatorio_falhado(run_id: int, nome_relatorio: str) -> None:
+    """Remove um relatório da lista de falhados quando retry é bem-sucedido."""
+    db = _database()
+    db.runs.update_one(
+        {"_id": run_id},
+        {"$unset": {f"failed_reports.{nome_relatorio}": 1}},
+    )
+
+
 def _com_id(doc: dict) -> dict:
     run = dict(doc)
     run["id"] = run.pop("_id")
