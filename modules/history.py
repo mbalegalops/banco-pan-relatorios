@@ -51,9 +51,11 @@ def _proximo_id(db) -> int:
     return doc["seq"]
 
 
-def create_run_record() -> int:
+def create_run_record(usuario: Optional[str] = None) -> int:
     db = _database()
     run_id = _proximo_id(db)
+    if usuario is None:
+        usuario = getpass.getuser()
     db.runs.insert_one({
         "_id": run_id,
         "started_at": datetime.now().isoformat(timespec="seconds"),
@@ -61,7 +63,7 @@ def create_run_record() -> int:
         "status": "running",
         "downloads": {},
         "error": None,
-        "usuario": getpass.getuser(),
+        "usuario": usuario,
         "log_uri": None,
     })
     return run_id

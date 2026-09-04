@@ -214,7 +214,7 @@ class Scheduler:
         from pipeline import executar
 
         try:
-            downloads = executar(run_id=None)
+            downloads = executar(run_id=None, usuario='AGENDADO')
 
             history.update_schedule_after_run(
                 schedule_id,

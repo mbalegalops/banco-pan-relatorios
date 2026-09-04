@@ -9,6 +9,7 @@ from typing import Callable, Optional
 
 from playwright.sync_api import sync_playwright
 
+import modules.history as history
 import modules.storage as storage
 from modules.browser import SessaoElaw
 from modules.cancel import checar_cancelamento
@@ -26,6 +27,7 @@ def executar(
     cancel_event: Optional[threading.Event] = None,
     on_sessao: Optional[Callable[[SessaoElaw], None]] = None,
     run_id: Optional[int] = None,
+    usuario: Optional[str] = None,
 ) -> dict[str, str]:
     """Executa o pipeline completo (login, pesquisa, exportação e upload
     dos relatórios pro S3) e retorna {nome_relatorio: chave_s3}.
@@ -42,6 +44,9 @@ def executar(
     `on_sessao`, se informado, recebe a `SessaoElaw` assim que o login é
     concluído — permite que quem chamou force o cancelamento (fechando o
     navegador) mesmo durante uma espera longa em andamento."""
+    if run_id is None:
+        run_id = history.create_run_record(usuario=usuario)
+
     checar_cancelamento(cancel_event)
     pasta = storage.pasta_do_dia()
     todos_nomes = REPORT_NAMES + [PAUTA_GERAL_NOME]
