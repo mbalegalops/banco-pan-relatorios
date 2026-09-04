@@ -438,28 +438,34 @@ def api_schedules_create(payload: dict) -> dict:
 
     Esperado:
     {
-      "name": "Relatórios 8h",
-      "cron_expression": "0 8 * * *",
-      "description": "Executa às 8h todo dia"
+      "hour": 8,
+      "minute": 0,
+      "days": [0, 1, 2, 3, 4]  (0=seg, 1=ter, ..., 6=dom)
     }
     """
-    name = (payload.get("name") or "").strip()
-    cron_expression = (payload.get("cron_expression") or "").strip()
-    description = (payload.get("description") or "").strip()
+    hour = payload.get("hour")
+    minute = payload.get("minute")
+    days = payload.get("days", [])
 
-    if not name:
-        raise HTTPException(400, "Nome é obrigatório")
-    if not cron_expression:
-        raise HTTPException(400, "Expressão cron é obrigatória")
+    if hour is None or not (0 <= hour <= 23):
+        raise HTTPException(400, "Hora deve estar entre 0 e 23")
+    if minute is None or not (0 <= minute <= 59):
+        raise HTTPException(400, "Minuto deve estar entre 0 e 59")
+    if not days:
+        raise HTTPException(400, "Selecione pelo menos um dia")
 
     try:
-        schedule_id = history.create_schedule(name, cron_expression, description, enabled=True)
+        schedule_id = history.create_schedule(hour, minute, days, enabled=True)
         if scheduler:
-            scheduler.add_schedule(schedule_id, name, cron_expression, enabled=True)
+            schedule = history.get_schedule(schedule_id)
+            scheduler.add_schedule(
+                schedule_id,
+                f"{hour:02d}:{minute:02d}",
+                schedule["cron_expression"],
+                enabled=True,
+            )
         logger.info(f"Agenda criada: {schedule_id}")
         return {"ok": True, "schedule_id": schedule_id}
-    except ValueError as exc:
-        raise HTTPException(400, f"Expressão cron inválida: {exc}")
     except Exception as exc:
         raise HTTPException(500, f"Erro ao criar agenda: {exc}")
 
@@ -468,21 +474,27 @@ def api_schedules_create(payload: dict) -> dict:
 def api_schedules_update(schedule_id: str, payload: dict) -> dict:
     """Atualiza agendamento existente."""
     try:
-        name = payload.get("name")
-        description = payload.get("description")
-        cron_expression = payload.get("cron_expression")
+        hour = payload.get("hour")
+        minute = payload.get("minute")
+        days = payload.get("days")
         enabled = payload.get("enabled")
 
         history.update_schedule(
             schedule_id,
-            name=name,
-            description=description,
-            cron_expression=cron_expression,
+            hour=hour,
+            minute=minute,
+            days=days,
             enabled=enabled,
         )
 
-        if scheduler and cron_expression is not None:
-            scheduler.update_schedule(schedule_id, cron_expression=cron_expression, enabled=enabled)
+        if scheduler:
+            schedule = history.get_schedule(schedule_id)
+            if schedule:
+                scheduler.update_schedule(
+                    schedule_id,
+                    cron_expression=schedule["cron_expression"],
+                    enabled=schedule.get("enabled", True),
+                )
 
         logger.info(f"Agenda atualizada: {schedule_id}")
         return {"ok": True}

@@ -273,13 +273,29 @@ a:hover { color: #084a8c; text-decoration: underline; }
 }
 
 .modal-agenda label { display: block; margin: 10px 0 3px 0; }
-.modal-agenda input[type="text"] {
+.modal-agenda select {
   width: 100%;
   font: 12px "Segoe UI", sans-serif;
   padding: 5px 6px;
   border: 1px solid #a0a0a0;
 }
 .modal-agenda input[type="checkbox"] { margin-right: 6px; }
+
+.days-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+}
+.days-picker label {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-size: 12px;
+}
 
 .field-hint { font-size: 10.5px; color: #6b6b6b; margin-top: 3px; }
 

@@ -360,10 +360,9 @@
   const btnNovaAgenda = el("btnNovaAgenda");
   const scheduleListBody = el("scheduleListBody");
   const modalAgenda = el("modalAgenda");
-  const scheduleModalTitle = el("scheduleModalTitle");
-  const scheduleName = el("scheduleName");
-  const scheduleDescription = el("scheduleDescription");
-  const scheduleCron = el("scheduleCron");
+  const scheduleHour = el("scheduleHour");
+  const scheduleMinute = el("scheduleMinute");
+  const dayChecks = document.querySelectorAll(".day-check");
   const scheduleEnabled = el("scheduleEnabled");
   const scheduleError = el("scheduleError");
   const scheduleSave = el("scheduleSave");
@@ -372,48 +371,84 @@
   let schedules = [];
   let editingScheduleId = null;
 
+  // Preencher seletor de horas
+  for (let h = 0; h < 24; h++) {
+    const opt = document.createElement("option");
+    opt.value = h;
+    opt.textContent = `${String(h).padStart(2, "0")}:00`;
+    scheduleHour.appendChild(opt);
+  }
+
+  const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
+
   function renderSchedules() {
     scheduleListBody.innerHTML = "";
     if (schedules.length === 0) {
-      scheduleListBody.innerHTML = '<div class="list-empty">Nenhuma agenda configurada. Clique em "+ Nova agenda" para começar.</div>';
+      scheduleListBody.innerHTML = '<div class="list-empty">Nenhuma agenda. Clique em "+ Nova".</div>';
       return;
     }
     for (const s of schedules) {
       const row = document.createElement("div");
       row.className = "list-row";
+      const hora = `${String(s.hour || 0).padStart(2, "0")}:${String(s.minute || 0).padStart(2, "0")}`;
+      const dias = (s.days || []).map(d => DIAS_SEMANA[d]).join(", ") || "-";
       const status = s.enabled ? "Ativo" : "Inativo";
-      const nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString("pt-BR") : "-";
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn btn-small";
+      editBtn.textContent = "Editar";
+      editBtn.onclick = (e) => { e.stopPropagation(); openScheduleModal(s); };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-small";
+      delBtn.textContent = "Deletar";
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (confirm("Deletar esta agenda?")) {
+          fetchJSON(`/api/schedules/${s._id}`, { method: "DELETE" })
+            .then(() => { flash("Agenda deletada", "#0b5cad"); refreshSchedules(); })
+            .catch((e) => flash(e.message, "#c0392b"));
+        }
+      };
+
       row.innerHTML = `
-        <div>${escapeHtml(s.name || "")}</div>
-        <div>${escapeHtml(s.cron_expression || "")}</div>
+        <div>${hora}</div>
+        <div>${dias}</div>
         <div>${status}</div>
-        <div>${nextRun}</div>`;
-      row.addEventListener("click", () => openScheduleModal(s));
+        <div></div>`;
+      row.lastChild.appendChild(editBtn);
+      row.lastChild.appendChild(delBtn);
       scheduleListBody.appendChild(row);
     }
   }
 
   function openScheduleModal(schedule = null) {
     scheduleError.textContent = "";
+    dayChecks.forEach(c => c.checked = false);
+
     if (schedule) {
-      scheduleModalTitle.textContent = "Editar Agenda";
-      scheduleName.value = schedule.name || "";
-      scheduleDescription.value = schedule.description || "";
-      scheduleCron.value = schedule.cron_expression || "";
+      scheduleHour.value = schedule.hour || 8;
+      scheduleMinute.value = schedule.minute || 0;
+      (schedule.days || []).forEach(d => {
+        const check = document.querySelector(`.day-check[value="${d}"]`);
+        if (check) check.checked = true;
+      });
       scheduleEnabled.checked = schedule.enabled || false;
       editingScheduleId = schedule._id;
     } else {
-      scheduleModalTitle.textContent = "Nova Agenda";
-      scheduleName.value = "";
-      scheduleDescription.value = "";
-      scheduleCron.value = "0 8 * * *";
+      scheduleHour.value = 8;
+      scheduleMinute.value = 0;
       scheduleEnabled.checked = true;
       editingScheduleId = null;
+      // Pré-selecionar seg-sex para nova agenda
+      document.querySelectorAll(".day-check").forEach((c, i) => {
+        if (i < 5) c.checked = true;
+      });
     }
+
     modalYesNo.hidden = true;
     modalAgenda.hidden = false;
     modalOverlay.hidden = false;
-    scheduleName.focus();
   }
 
   function closeScheduleModal() {
@@ -429,19 +464,15 @@
   }
 
   scheduleSave.onclick = () => {
-    const name = scheduleName.value.trim();
-    const description = scheduleDescription.value.trim();
-    const cron = scheduleCron.value.trim();
+    const hour = parseInt(scheduleHour.value);
+    const minute = parseInt(scheduleMinute.value);
+    const days = Array.from(dayChecks).filter(c => c.checked).map(c => parseInt(c.value));
     const enabled = scheduleEnabled.checked;
 
     scheduleError.textContent = "";
 
-    if (!name) {
-      scheduleError.textContent = "Nome é obrigatório";
-      return;
-    }
-    if (!cron) {
-      scheduleError.textContent = "Expressão cron é obrigatória";
+    if (!days.length) {
+      scheduleError.textContent = "Selecione pelo menos um dia";
       return;
     }
 
@@ -451,7 +482,7 @@
     fetchJSON(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description, cron_expression: cron, enabled }),
+      body: JSON.stringify({ hour, minute, days, enabled }),
     })
       .then(() => {
         closeScheduleModal();

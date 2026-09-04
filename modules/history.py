@@ -155,17 +155,17 @@ def get_run(run_id: int) -> Optional[dict]:
 
 
 def create_schedule(
-    name: str,
-    cron_expression: str,
-    description: str = "",
+    hour: int,
+    minute: int,
+    days: list[int],
     enabled: bool = True,
 ) -> str:
     """Cria novo agendamento e retorna seu ID.
 
     Args:
-        name: Nome da agenda
-        cron_expression: Expressão cron (ex: "0 8 * * *")
-        description: Descrição opcional
+        hour: Hora (0-23)
+        minute: Minuto (0-59)
+        days: Lista de dias da semana (0=seg, 1=ter, ..., 6=dom)
         enabled: Se agenda está ativa
 
     Returns:
@@ -174,10 +174,15 @@ def create_schedule(
     db = _database()
     from bson.objectid import ObjectId
 
+    # Converte dias para expressão cron (0=seg..6=dom em cron, onde 0=dom..6=sab)
+    cron_days = ",".join(str((d + 1) % 7) for d in days) if days else "*"
+    cron_expression = f"{minute} {hour} * * {cron_days}"
+
     schedule = {
         "_id": ObjectId(),
-        "name": name,
-        "description": description,
+        "hour": hour,
+        "minute": minute,
+        "days": days,
         "cron_expression": cron_expression,
         "enabled": enabled,
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -193,30 +198,33 @@ def create_schedule(
 
 def update_schedule(
     schedule_id: str,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    cron_expression: Optional[str] = None,
+    hour: Optional[int] = None,
+    minute: Optional[int] = None,
+    days: Optional[list[int]] = None,
     enabled: Optional[bool] = None,
 ) -> None:
     """Atualiza agendamento existente.
 
     Args:
         schedule_id: ID da agenda (como string)
-        name: Novo nome (None = manter atual)
-        description: Nova descrição
-        cron_expression: Nova expressão cron
+        hour: Nova hora (None = manter atual)
+        minute: Novo minuto (None = manter atual)
+        days: Novos dias da semana (None = manter atual)
         enabled: Nova status
     """
     db = _database()
     from bson.objectid import ObjectId
 
     updates = {}
-    if name is not None:
-        updates["name"] = name
-    if description is not None:
-        updates["description"] = description
-    if cron_expression is not None:
-        updates["cron_expression"] = cron_expression
+    if hour is not None:
+        updates["hour"] = hour
+    if minute is not None:
+        updates["minute"] = minute
+    if days is not None:
+        updates["days"] = days
+        # Regenera expressão cron
+        cron_days = ",".join(str((d + 1) % 7) for d in days) if days else "*"
+        updates["cron_expression"] = f"{minute or 0} {hour or 0} * * {cron_days}"
     if enabled is not None:
         updates["enabled"] = enabled
 

@@ -46,14 +46,14 @@
     <div class="col" id="agendamentosTab" hidden>
       <div class="col-header">
         <span class="col-title">Agendamentos</span>
-        <button class="btn btn-small btn-primary" id="btnNovaAgenda">+ Nova agenda</button>
+        <button class="btn btn-small btn-primary" id="btnNovaAgenda">+ Nova</button>
       </div>
       <div class="list-box">
         <div class="list-head">
-          <div>Nome</div>
-          <div>Cron</div>
+          <div>Hora</div>
+          <div>Dias</div>
           <div>Status</div>
-          <div>Próxima</div>
+          <div>Ações</div>
         </div>
         <div class="list-body" id="scheduleListBody"></div>
       </div>
@@ -114,20 +114,37 @@
   </div>
 
   <div class="modal modal-agenda" id="modalAgenda" hidden>
-    <div class="modal-title" id="scheduleModalTitle">Nova Agenda</div>
-    <div class="modal-msg">Configure quando e com que frequência executar os relatórios</div>
-    <label>Nome</label>
-    <input type="text" id="scheduleName" placeholder="Ex: Relatórios Matinal">
-    <label>Descrição (opcional)</label>
-    <input type="text" id="scheduleDescription" placeholder="Ex: Executa às 8h todo dia útil">
-    <label>Expressão Cron</label>
-    <input type="text" id="scheduleCron" placeholder="Ex: 0 8 * * *">
-    <div class="field-hint" id="cronHint">
-      Exemplos: 0 8 * * * (8h todo dia) | 0 8 * * 1-5 (8h seg-sex) | 0 */2 * * * (a cada 2h)
+    <div class="modal-title">Configurar Agendamento</div>
+    <div class="modal-msg">Escolha a hora e os dias em que executar</div>
+
+    <label>Hora</label>
+    <select id="scheduleHour">
+      <option value="">-- Selecione hora --</option>
+    </select>
+
+    <label>Minuto</label>
+    <select id="scheduleMinute">
+      <option value="0">00</option>
+      <option value="15">15</option>
+      <option value="30">30</option>
+      <option value="45">45</option>
+    </select>
+
+    <label>Dias da Semana</label>
+    <div class="days-picker">
+      <label><input type="checkbox" class="day-check" value="0"> Segunda</label>
+      <label><input type="checkbox" class="day-check" value="1"> Terça</label>
+      <label><input type="checkbox" class="day-check" value="2"> Quarta</label>
+      <label><input type="checkbox" class="day-check" value="3"> Quinta</label>
+      <label><input type="checkbox" class="day-check" value="4"> Sexta</label>
+      <label><input type="checkbox" class="day-check" value="5"> Sábado</label>
+      <label><input type="checkbox" class="day-check" value="6"> Domingo</label>
     </div>
+
     <label>
-      <input type="checkbox" id="scheduleEnabled"> Ativar agenda
+      <input type="checkbox" id="scheduleEnabled"> Ativar agendamento
     </label>
+
     <div class="modal-error" id="scheduleError"></div>
     <div class="modal-buttons">
       <button class="btn" id="scheduleCancel">Cancelar</button>
