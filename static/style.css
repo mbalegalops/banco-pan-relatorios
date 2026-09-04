@@ -246,32 +246,6 @@ a:hover { color: #084a8c; text-decoration: underline; }
   color: #333;
 }
 
-/* abas */
-.tabs {
-  display: flex;
-  gap: 2px;
-  background: #f0f0f0;
-  padding: 12px 26px 0 26px;
-  border-bottom: 1px solid #c0c0c0;
-}
-
-.tab-btn {
-  font: 12px "Segoe UI", sans-serif;
-  padding: 6px 14px;
-  background: #e1e1e1;
-  border: 1px solid #adadad;
-  border-bottom: none;
-  cursor: pointer;
-  color: #333;
-}
-.tab-btn:hover { background: #e5e5e5; }
-.tab-btn.tab-active {
-  background: #fff;
-  border-top: 1px solid #0078d7;
-  border-left: 1px solid #0078d7;
-  border-right: 1px solid #0078d7;
-}
-
 .modal-agenda label { display: block; margin: 10px 0 3px 0; }
 .modal-agenda select {
   width: 100%;

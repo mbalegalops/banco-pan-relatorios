@@ -14,6 +14,7 @@
       <div class="subtitle">Extração automatizada de relatórios DADOS DO PROCESSO, ESCRITÓRIO - TAREFAS e PAUTA GERAL</div>
     </div>
     <div class="actions">
+      <button class="btn" id="btnConfigurarAgenda" title="Configurar agendamento">⏰ Agendar</button>
       <button class="btn" id="btnCredenciais">Credenciais</button>
       <button class="btn btn-primary" id="btnExecutar">▶ Executar agora</button>
     </div>
@@ -21,13 +22,8 @@
 
   <div class="warning" id="warning" hidden></div>
 
-  <div class="tabs">
-    <button class="tab-btn tab-active" id="tabExecutacoes">Execuções</button>
-    <button class="tab-btn" id="tabAgendamentos">Agendamentos</button>
-  </div>
-
   <div class="columns">
-    <div class="col" id="execucoesTab">
+    <div class="col">
       <div class="col-header">
         <span class="col-title">Execuções</span>
         <button class="btn btn-small" id="btnAtualizar">⟳ Atualizar</button>
@@ -40,22 +36,6 @@
           <div>Status</div>
         </div>
         <div class="list-body" id="listBody"></div>
-      </div>
-    </div>
-
-    <div class="col" id="agendamentosTab" hidden>
-      <div class="col-header">
-        <span class="col-title">Agendamentos</span>
-        <button class="btn btn-small btn-primary" id="btnNovaAgenda">+ Nova</button>
-      </div>
-      <div class="list-box">
-        <div class="list-head">
-          <div>Hora</div>
-          <div>Dias</div>
-          <div>Status</div>
-          <div>Ações</div>
-        </div>
-        <div class="list-body" id="scheduleListBody"></div>
       </div>
     </div>
 
@@ -114,8 +94,8 @@
   </div>
 
   <div class="modal modal-agenda" id="modalAgenda" hidden>
-    <div class="modal-title">Configurar Agendamento</div>
-    <div class="modal-msg">Escolha a hora e os dias em que executar</div>
+    <div class="modal-title">Agendar Execução Diária</div>
+    <div class="modal-msg">Defina a hora e os dias em que executar automaticamente</div>
 
     <div class="time-picker">
       <div class="time-field">
@@ -130,7 +110,7 @@
       </div>
     </div>
 
-    <label>Dias da Semana</label>
+    <label style="margin-top: 10px; display: block;">Dias da Semana</label>
     <div class="days-picker">
       <label><input type="checkbox" class="day-check" value="0"> Segunda</label>
       <label><input type="checkbox" class="day-check" value="1"> Terça</label>
@@ -141,7 +121,7 @@
       <label><input type="checkbox" class="day-check" value="6"> Domingo</label>
     </div>
 
-    <label>
+    <label style="margin-top: 10px;">
       <input type="checkbox" id="scheduleEnabled"> Ativar agendamento
     </label>
 

@@ -351,14 +351,9 @@
     ws.onerror = () => ws.close();
   }
 
-  // ------------------------------------------------------------- Agendamentos
+  // ------------------------------------------------------------- Agendamento Único
 
-  const tabExecutacoes = el("tabExecutacoes");
-  const tabAgendamentos = el("tabAgendamentos");
-  const execucoesTab = el("execucoesTab");
-  const agendamentosTab = el("agendamentosTab");
-  const btnNovaAgenda = el("btnNovaAgenda");
-  const scheduleListBody = el("scheduleListBody");
+  const btnConfigurarAgenda = el("btnConfigurarAgenda");
   const modalAgenda = el("modalAgenda");
   const scheduleHour = el("scheduleHour");
   const scheduleMinute = el("scheduleMinute");
@@ -376,8 +371,7 @@
     scheduleMinute.value = val;
   });
 
-  let schedules = [];
-  let editingScheduleId = null;
+  let currentSchedule = null;
 
   // Preencher seletor de horas
   for (let h = 0; h < 24; h++) {
@@ -387,68 +381,23 @@
     scheduleHour.appendChild(opt);
   }
 
-  const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"];
-
-  function renderSchedules() {
-    scheduleListBody.innerHTML = "";
-    if (schedules.length === 0) {
-      scheduleListBody.innerHTML = '<div class="list-empty">Nenhuma agenda. Clique em "+ Nova".</div>';
-      return;
-    }
-    for (const s of schedules) {
-      const row = document.createElement("div");
-      row.className = "list-row";
-      const hora = `${String(s.hour || 0).padStart(2, "0")}:${String(s.minute || 0).padStart(2, "0")}`;
-      const dias = (s.days || []).map(d => DIAS_SEMANA[d]).join(", ") || "-";
-      const status = s.enabled ? "Ativo" : "Inativo";
-
-      const editBtn = document.createElement("button");
-      editBtn.className = "btn btn-small";
-      editBtn.textContent = "Editar";
-      editBtn.onclick = (e) => { e.stopPropagation(); openScheduleModal(s); };
-
-      const delBtn = document.createElement("button");
-      delBtn.className = "btn btn-small";
-      delBtn.textContent = "Deletar";
-      delBtn.onclick = (e) => {
-        e.stopPropagation();
-        if (confirm("Deletar esta agenda?")) {
-          fetchJSON(`/api/schedules/${s._id}`, { method: "DELETE" })
-            .then(() => { flash("Agenda deletada", "#0b5cad"); refreshSchedules(); })
-            .catch((e) => flash(e.message, "#c0392b"));
-        }
-      };
-
-      row.innerHTML = `
-        <div>${hora}</div>
-        <div>${dias}</div>
-        <div>${status}</div>
-        <div></div>`;
-      row.lastChild.appendChild(editBtn);
-      row.lastChild.appendChild(delBtn);
-      scheduleListBody.appendChild(row);
-    }
-  }
-
-  function openScheduleModal(schedule = null) {
+  function openScheduleModal() {
     scheduleError.textContent = "";
     dayChecks.forEach(c => c.checked = false);
 
-    if (schedule) {
-      scheduleHour.value = schedule.hour || 8;
-      scheduleMinute.value = String(schedule.minute || 0).padStart(2, "0");
-      (schedule.days || []).forEach(d => {
+    if (currentSchedule) {
+      scheduleHour.value = currentSchedule.hour || 8;
+      scheduleMinute.value = String(currentSchedule.minute || 0).padStart(2, "0");
+      (currentSchedule.days || []).forEach(d => {
         const check = document.querySelector(`.day-check[value="${d}"]`);
         if (check) check.checked = true;
       });
-      scheduleEnabled.checked = schedule.enabled || false;
-      editingScheduleId = schedule._id;
+      scheduleEnabled.checked = currentSchedule.enabled || false;
     } else {
       scheduleHour.value = 8;
       scheduleMinute.value = "00";
       scheduleEnabled.checked = true;
-      editingScheduleId = null;
-      // Pré-selecionar seg-sex para nova agenda
+      // Pré-selecionar seg-sex
       document.querySelectorAll(".day-check").forEach((c, i) => {
         if (i < 5) c.checked = true;
       });
@@ -464,11 +413,24 @@
     modalAgenda.hidden = true;
   }
 
-  function refreshSchedules() {
+  function loadSchedule() {
     return fetchJSON("/api/schedules").then((data) => {
-      schedules = data.schedules || [];
-      renderSchedules();
-    }).catch((e) => flash(e.message, "#c0392b"));
+      const schedules = data.schedules || [];
+      currentSchedule = schedules.length > 0 ? schedules[0] : null;
+      updateScheduleButton();
+    }).catch(() => {
+      currentSchedule = null;
+      updateScheduleButton();
+    });
+  }
+
+  function updateScheduleButton() {
+    if (currentSchedule && currentSchedule.enabled) {
+      const hora = `${String(currentSchedule.hour || 0).padStart(2, "0")}:${String(currentSchedule.minute || 0).padStart(2, "0")}`;
+      btnConfigurarAgenda.textContent = `⏰ ${hora}`;
+    } else {
+      btnConfigurarAgenda.textContent = "⏰ Agendar";
+    }
   }
 
   scheduleSave.onclick = () => {
@@ -492,8 +454,8 @@
       return;
     }
 
-    const method = editingScheduleId ? "PUT" : "POST";
-    const url = editingScheduleId ? `/api/schedules/${editingScheduleId}` : "/api/schedules";
+    const method = currentSchedule ? "PUT" : "POST";
+    const url = currentSchedule ? `/api/schedules/${currentSchedule._id}` : "/api/schedules";
 
     fetchJSON(url, {
       method,
@@ -502,33 +464,18 @@
     })
       .then(() => {
         closeScheduleModal();
-        flash("Agenda salva com sucesso", "#0b5cad");
-        refreshSchedules();
+        flash("Agendamento salvo com sucesso", "#0b5cad");
+        loadSchedule();
       })
       .catch((e) => { scheduleError.textContent = e.message; });
   };
 
   scheduleCancel.onclick = closeScheduleModal;
-
-  btnNovaAgenda.addEventListener("click", () => openScheduleModal());
-
-  tabExecutacoes.addEventListener("click", () => {
-    tabExecutacoes.classList.add("tab-active");
-    tabAgendamentos.classList.remove("tab-active");
-    execucoesTab.hidden = false;
-    agendamentosTab.hidden = true;
-  });
-
-  tabAgendamentos.addEventListener("click", () => {
-    tabAgendamentos.classList.add("tab-active");
-    tabExecutacoes.classList.remove("tab-active");
-    agendamentosTab.hidden = false;
-    execucoesTab.hidden = true;
-    refreshSchedules();
-  });
+  btnConfigurarAgenda.addEventListener("click", openScheduleModal);
 
   // ------------------------------------------------------------- boot
 
   refreshExecucoes(true);
+  loadSchedule();
   connectWs();
 })();

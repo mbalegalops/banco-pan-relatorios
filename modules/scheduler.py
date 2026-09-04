@@ -8,12 +8,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.mongodb import MongoDBJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 from pytz import timezone
+from pymongo import MongoClient
 
 import modules.history as history
 
 logger = logging.getLogger(__name__)
 
-TZ_BRASIL = timezone("America/Sao_Paulo")
+TZ_BRASIL = timezone("America/Manaus")  # GMT-4 (Amazonas)
 
 
 class Scheduler:
@@ -42,11 +43,10 @@ class Scheduler:
             logger.warning("Scheduler já está em execução")
             return
 
+        from apscheduler.jobstores.memory import MemoryJobStore
+
         jobstores = {
-            "default": MongoDBJobStore(
-                url=self.mongo_uri,
-                collection="scheduler_jobs",
-            )
+            "default": MemoryJobStore(),
         }
         executors = {"default": ThreadPoolExecutor(max_workers=2)}
         job_defaults = {"coalesce": True, "max_instances": 1}
