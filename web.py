@@ -195,7 +195,7 @@ def _worker(run_id: int, cancel_event: threading.Event) -> None:
             state.live_downloads = {}
 
 
-def _start_run() -> dict:
+def _start_run(usuario: Optional[str] = None) -> dict:
     with state.lock:
         if state.worker_thread is not None:
             raise HTTPException(409, "Já existe uma execução em andamento.")
@@ -204,7 +204,7 @@ def _start_run() -> dict:
         if not email or not tem_senha:
             raise HTTPException(400, 'Credenciais do eLaw não configuradas — clique em "Credenciais" antes de executar.')
 
-        run_id = history.create_run_record()
+        run_id = history.create_run_record(usuario=usuario)
         cancel_event = threading.Event()
         state.cancel_event = cancel_event
         state.sessao = None
@@ -219,6 +219,11 @@ def _start_run() -> dict:
 
 
 # ------------------------------------------------------------------- rotas
+
+def iniciar_execucao(usuario: Optional[str] = None) -> dict:
+    """Inicia execução. Usada por web.py e scheduler."""
+    return _start_run(usuario=usuario)
+
 
 @app.post("/api/executar")
 def api_executar() -> dict:

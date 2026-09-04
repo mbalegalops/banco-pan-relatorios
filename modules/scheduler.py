@@ -211,32 +211,15 @@ class Scheduler:
         """
         logger.info(f"Executando agenda '{schedule_id}'...")
 
-        from pipeline import executar
-
         try:
-            downloads = executar(run_id=None, usuario='AGENDADO')
+            # Importação local para evitar referência circular com web.py
+            from web import iniciar_execucao
+            result = iniciar_execucao(usuario='AGENDADO')
+            run_id = result.get('execucao_id')
 
-            history.update_schedule_after_run(
-                schedule_id,
-                last_run_at=datetime.now().isoformat(timespec="seconds"),
-                last_status="success",
-            )
-
-            if self.on_job_executed:
-                self.on_job_executed(schedule_id, None)
-
-            logger.info(f"Agenda '{schedule_id}' executada com sucesso")
+            logger.info(f"Agenda '{schedule_id}' iniciada (Execução #{run_id})")
         except Exception as exc:
-            logger.exception(f"Erro ao executar agenda '{schedule_id}'")
-
-            history.update_schedule_after_run(
-                schedule_id,
-                last_run_at=datetime.now().isoformat(timespec="seconds"),
-                last_status="error",
-            )
-
-            if self.on_job_error:
-                self.on_job_error(schedule_id, exc)
+            logger.exception(f"Erro ao iniciar agenda '{schedule_id}'")
 
     @staticmethod
     def _parse_cron(cron_expression: str) -> dict:
