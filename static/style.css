@@ -281,6 +281,21 @@ a:hover { color: #084a8c; text-decoration: underline; }
 }
 .modal-agenda input[type="checkbox"] { margin-right: 6px; }
 
+.time-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 10px 0;
+}
+.time-field label { display: block; margin-bottom: 3px; }
+.time-field select,
+.time-field input {
+  width: 100%;
+  font: 12px "Segoe UI", sans-serif;
+  padding: 5px 6px;
+  border: 1px solid #a0a0a0;
+}
+
 .days-picker {
   display: grid;
   grid-template-columns: 1fr 1fr;

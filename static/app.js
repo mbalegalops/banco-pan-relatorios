@@ -368,6 +368,14 @@
   const scheduleSave = el("scheduleSave");
   const scheduleCancel = el("scheduleCancel");
 
+  // Validar minuto (0-59)
+  scheduleMinute.addEventListener("change", () => {
+    let val = parseInt(scheduleMinute.value) || 0;
+    if (val < 0) val = 0;
+    if (val > 59) val = 59;
+    scheduleMinute.value = val;
+  });
+
   let schedules = [];
   let editingScheduleId = null;
 
@@ -428,7 +436,7 @@
 
     if (schedule) {
       scheduleHour.value = schedule.hour || 8;
-      scheduleMinute.value = schedule.minute || 0;
+      scheduleMinute.value = String(schedule.minute || 0).padStart(2, "0");
       (schedule.days || []).forEach(d => {
         const check = document.querySelector(`.day-check[value="${d}"]`);
         if (check) check.checked = true;
@@ -437,7 +445,7 @@
       editingScheduleId = schedule._id;
     } else {
       scheduleHour.value = 8;
-      scheduleMinute.value = 0;
+      scheduleMinute.value = "00";
       scheduleEnabled.checked = true;
       editingScheduleId = null;
       // Pré-selecionar seg-sex para nova agenda
@@ -465,11 +473,19 @@
 
   scheduleSave.onclick = () => {
     const hour = parseInt(scheduleHour.value);
-    const minute = parseInt(scheduleMinute.value);
+    let minute = parseInt(scheduleMinute.value) || 0;
+    if (minute < 0) minute = 0;
+    if (minute > 59) minute = 59;
+
     const days = Array.from(dayChecks).filter(c => c.checked).map(c => parseInt(c.value));
     const enabled = scheduleEnabled.checked;
 
     scheduleError.textContent = "";
+
+    if (isNaN(hour) || hour < 0 || hour > 23) {
+      scheduleError.textContent = "Hora deve estar entre 0 e 23";
+      return;
+    }
 
     if (!days.length) {
       scheduleError.textContent = "Selecione pelo menos um dia";

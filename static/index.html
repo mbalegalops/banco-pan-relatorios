@@ -117,18 +117,18 @@
     <div class="modal-title">Configurar Agendamento</div>
     <div class="modal-msg">Escolha a hora e os dias em que executar</div>
 
-    <label>Hora</label>
-    <select id="scheduleHour">
-      <option value="">-- Selecione hora --</option>
-    </select>
-
-    <label>Minuto</label>
-    <select id="scheduleMinute">
-      <option value="0">00</option>
-      <option value="15">15</option>
-      <option value="30">30</option>
-      <option value="45">45</option>
-    </select>
+    <div class="time-picker">
+      <div class="time-field">
+        <label>Hora</label>
+        <select id="scheduleHour">
+          <option value="">-- Hora --</option>
+        </select>
+      </div>
+      <div class="time-field">
+        <label>Minuto</label>
+        <input type="number" id="scheduleMinute" min="0" max="59" value="0">
+      </div>
+    </div>
 
     <label>Dias da Semana</label>
     <div class="days-picker">
