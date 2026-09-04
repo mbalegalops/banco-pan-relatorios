@@ -21,8 +21,13 @@
 
   <div class="warning" id="warning" hidden></div>
 
+  <div class="tabs">
+    <button class="tab-btn tab-active" id="tabExecutacoes">Execuções</button>
+    <button class="tab-btn" id="tabAgendamentos">Agendamentos</button>
+  </div>
+
   <div class="columns">
-    <div class="col">
+    <div class="col" id="execucoesTab">
       <div class="col-header">
         <span class="col-title">Execuções</span>
         <button class="btn btn-small" id="btnAtualizar">⟳ Atualizar</button>
@@ -35,6 +40,22 @@
           <div>Status</div>
         </div>
         <div class="list-body" id="listBody"></div>
+      </div>
+    </div>
+
+    <div class="col" id="agendamentosTab" hidden>
+      <div class="col-header">
+        <span class="col-title">Agendamentos</span>
+        <button class="btn btn-small btn-primary" id="btnNovaAgenda">+ Nova agenda</button>
+      </div>
+      <div class="list-box">
+        <div class="list-head">
+          <div>Nome</div>
+          <div>Cron</div>
+          <div>Status</div>
+          <div>Próxima</div>
+        </div>
+        <div class="list-body" id="scheduleListBody"></div>
       </div>
     </div>
 
@@ -89,6 +110,28 @@
     <div class="modal-buttons">
       <button class="btn" id="credCancelar">Cancelar</button>
       <button class="btn btn-primary" id="credSalvar">Salvar</button>
+    </div>
+  </div>
+
+  <div class="modal modal-agenda" id="modalAgenda" hidden>
+    <div class="modal-title" id="scheduleModalTitle">Nova Agenda</div>
+    <div class="modal-msg">Configure quando e com que frequência executar os relatórios</div>
+    <label>Nome</label>
+    <input type="text" id="scheduleName" placeholder="Ex: Relatórios Matinal">
+    <label>Descrição (opcional)</label>
+    <input type="text" id="scheduleDescription" placeholder="Ex: Executa às 8h todo dia útil">
+    <label>Expressão Cron</label>
+    <input type="text" id="scheduleCron" placeholder="Ex: 0 8 * * *">
+    <div class="field-hint" id="cronHint">
+      Exemplos: 0 8 * * * (8h todo dia) | 0 8 * * 1-5 (8h seg-sex) | 0 */2 * * * (a cada 2h)
+    </div>
+    <label>
+      <input type="checkbox" id="scheduleEnabled"> Ativar agenda
+    </label>
+    <div class="modal-error" id="scheduleError"></div>
+    <div class="modal-buttons">
+      <button class="btn" id="scheduleCancel">Cancelar</button>
+      <button class="btn btn-primary" id="scheduleSave">Salvar</button>
     </div>
   </div>
 </div>

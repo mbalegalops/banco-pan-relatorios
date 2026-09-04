@@ -351,6 +351,135 @@
     ws.onerror = () => ws.close();
   }
 
+  // ------------------------------------------------------------- Agendamentos
+
+  const tabExecutacoes = el("tabExecutacoes");
+  const tabAgendamentos = el("tabAgendamentos");
+  const execucoesTab = el("execucoesTab");
+  const agendamentosTab = el("agendamentosTab");
+  const btnNovaAgenda = el("btnNovaAgenda");
+  const scheduleListBody = el("scheduleListBody");
+  const modalAgenda = el("modalAgenda");
+  const scheduleModalTitle = el("scheduleModalTitle");
+  const scheduleName = el("scheduleName");
+  const scheduleDescription = el("scheduleDescription");
+  const scheduleCron = el("scheduleCron");
+  const scheduleEnabled = el("scheduleEnabled");
+  const scheduleError = el("scheduleError");
+  const scheduleSave = el("scheduleSave");
+  const scheduleCancel = el("scheduleCancel");
+
+  let schedules = [];
+  let editingScheduleId = null;
+
+  function renderSchedules() {
+    scheduleListBody.innerHTML = "";
+    if (schedules.length === 0) {
+      scheduleListBody.innerHTML = '<div class="list-empty">Nenhuma agenda configurada. Clique em "+ Nova agenda" para começar.</div>';
+      return;
+    }
+    for (const s of schedules) {
+      const row = document.createElement("div");
+      row.className = "list-row";
+      const status = s.enabled ? "Ativo" : "Inativo";
+      const nextRun = s.next_run_at ? new Date(s.next_run_at).toLocaleString("pt-BR") : "-";
+      row.innerHTML = `
+        <div>${escapeHtml(s.name || "")}</div>
+        <div>${escapeHtml(s.cron_expression || "")}</div>
+        <div>${status}</div>
+        <div>${nextRun}</div>`;
+      row.addEventListener("click", () => openScheduleModal(s));
+      scheduleListBody.appendChild(row);
+    }
+  }
+
+  function openScheduleModal(schedule = null) {
+    scheduleError.textContent = "";
+    if (schedule) {
+      scheduleModalTitle.textContent = "Editar Agenda";
+      scheduleName.value = schedule.name || "";
+      scheduleDescription.value = schedule.description || "";
+      scheduleCron.value = schedule.cron_expression || "";
+      scheduleEnabled.checked = schedule.enabled || false;
+      editingScheduleId = schedule._id;
+    } else {
+      scheduleModalTitle.textContent = "Nova Agenda";
+      scheduleName.value = "";
+      scheduleDescription.value = "";
+      scheduleCron.value = "0 8 * * *";
+      scheduleEnabled.checked = true;
+      editingScheduleId = null;
+    }
+    modalYesNo.hidden = true;
+    modalAgenda.hidden = false;
+    modalOverlay.hidden = false;
+    scheduleName.focus();
+  }
+
+  function closeScheduleModal() {
+    modalOverlay.hidden = true;
+    modalAgenda.hidden = true;
+  }
+
+  function refreshSchedules() {
+    return fetchJSON("/api/schedules").then((data) => {
+      schedules = data.schedules || [];
+      renderSchedules();
+    }).catch((e) => flash(e.message, "#c0392b"));
+  }
+
+  scheduleSave.onclick = () => {
+    const name = scheduleName.value.trim();
+    const description = scheduleDescription.value.trim();
+    const cron = scheduleCron.value.trim();
+    const enabled = scheduleEnabled.checked;
+
+    scheduleError.textContent = "";
+
+    if (!name) {
+      scheduleError.textContent = "Nome é obrigatório";
+      return;
+    }
+    if (!cron) {
+      scheduleError.textContent = "Expressão cron é obrigatória";
+      return;
+    }
+
+    const method = editingScheduleId ? "PUT" : "POST";
+    const url = editingScheduleId ? `/api/schedules/${editingScheduleId}` : "/api/schedules";
+
+    fetchJSON(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description, cron_expression: cron, enabled }),
+    })
+      .then(() => {
+        closeScheduleModal();
+        flash("Agenda salva com sucesso", "#0b5cad");
+        refreshSchedules();
+      })
+      .catch((e) => { scheduleError.textContent = e.message; });
+  };
+
+  scheduleCancel.onclick = closeScheduleModal;
+
+  btnNovaAgenda.addEventListener("click", () => openScheduleModal());
+
+  tabExecutacoes.addEventListener("click", () => {
+    tabExecutacoes.classList.add("tab-active");
+    tabAgendamentos.classList.remove("tab-active");
+    execucoesTab.hidden = false;
+    agendamentosTab.hidden = true;
+  });
+
+  tabAgendamentos.addEventListener("click", () => {
+    tabAgendamentos.classList.add("tab-active");
+    tabExecutacoes.classList.remove("tab-active");
+    agendamentosTab.hidden = false;
+    execucoesTab.hidden = true;
+    refreshSchedules();
+  });
+
   // ------------------------------------------------------------- boot
 
   refreshExecucoes(true);
