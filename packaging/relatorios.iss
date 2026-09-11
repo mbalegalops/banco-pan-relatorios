@@ -47,15 +47,10 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Name: "desktopicon"; Description: "Criar atalho na Área de Trabalho"; GroupDescription: "Atalhos adicionais:"
 
 [Files]
-; ignoreversion faz o .env (e todo o resto) ser sempre sobrescrito pelo
-; conteúdo do build atual, mesmo em cima de uma instalação existente -
-; não há preservação de credenciais editadas na máquina de destino:
-; qualquer alteração feita na GUI lá é perdida na próxima atualização, a
-; menos que seja replicada no .env da raiz antes do build. O runs.db e os
-; logs de execuções passadas, por outro lado, NÃO são tocados por essa
-; instalação: ficam soltos em {app}, fora de _internal\ (que é o único
-; conteúdo realmente sobrescrito), então sobrevivem a uma atualização.
-Source: "dist\RelatoriosPan\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; O .env é criado só na primeira instalação. Em upgrades ele preserva as
+; credenciais e URLs configuradas na máquina do usuário.
+Source: "dist\RelatoriosPan\*"; DestDir: "{app}"; Excludes: ".env"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\RelatoriosPan\.env"; DestDir: "{app}"; Flags: onlyifdoesntexist
 
 [Dirs]
 Name: "{app}\logs\runs"

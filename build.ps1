@@ -10,7 +10,8 @@
 #>
 
 param(
-    [string]$Version
+    [string]$Version,
+    [switch]$Publish
 )
 
 $ErrorActionPreference = "Stop"
@@ -112,3 +113,11 @@ Write-Host "Gerando instalador com Inno Setup ($iscc), versão $Version..."
 $installerName = "banco-pan-robo-relatorios.exe"
 Write-Host ""
 Write-Host "Pronto! Instalador gerado em installer\$installerName (versão $Version)" -ForegroundColor Green
+
+if ($Publish) {
+    Write-Host "Publicando instalador e manifesto de atualização no S3..." -ForegroundColor Cyan
+    & $venvPython publish_release.py $Version (Join-Path $root "installer\$installerName")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao publicar a release no S3. O manifesto não foi atualizado."
+    }
+}

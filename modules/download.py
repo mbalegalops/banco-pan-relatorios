@@ -15,6 +15,7 @@ from modules.cancel import checar_cancelamento
 from modules.elaw import REPORT_FILE_PREFIXES
 from modules.paths import TEMP_DOWNLOADS_DIR
 from modules.progress import OnReport, emit_report
+from modules.report_filter import filtrar_processos_mascarenhas
 
 logger = logging.getLogger(__name__)
 
@@ -115,11 +116,23 @@ def _baixar_relatorio(page: Page, nome_relatorio: str, clip_selector: str, pasta
     caminho_temp = TEMP_DOWNLOADS_DIR / filename
     download.save_as(str(caminho_temp))
 
+    # S3, SharePoint e a interface sempre recebem a mesma versão saneada.
+    # O filtro é um no-op para DADOS DO PROCESSO.
+    filtrar_processos_mascarenhas(caminho_temp, nome_relatorio)
+
     chave_s3 = storage.enviar_relatorio(caminho_temp, pasta)
 
-    sharepoint.enviar_relatorio_sharepoint(caminho_temp, pasta)
+    # A cópia para o SharePoint é feita em uma thread. O temporário só pode
+    # ser removido quando essa thread terminar; removê-lo aqui fazia a thread
+    # eventualmente tentar copiar um arquivo que já não existia.
+    def remover_temporario_sharepoint(_sucesso: bool, _mensagem: str) -> None:
+        caminho_temp.unlink(missing_ok=True)
 
-    caminho_temp.unlink(missing_ok=True)
+    sharepoint.enviar_relatorio_sharepoint(
+        caminho_temp,
+        pasta,
+        on_complete=remover_temporario_sharepoint,
+    )
     logger.info(f"Relatório '{nome_relatorio}' salvo em s3://{storage.S3_BUCKET}/{chave_s3}")
     return chave_s3
 

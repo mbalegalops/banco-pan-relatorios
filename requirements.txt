@@ -6,3 +6,4 @@ fastapi
 uvicorn[standard]
 apscheduler==3.10.4
 pytz
+openpyxl

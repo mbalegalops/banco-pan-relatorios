@@ -104,6 +104,25 @@ def finish_run_record(
     )
 
 
+def cancelar_execucoes_em_andamento() -> int:
+    """Marca como canceladas todas as execuções ainda em andamento.
+
+    É uma operação de manutenção para recuperar registros que ficaram com
+    status ``running`` depois que a aplicação foi encerrada inesperadamente.
+    O retorno é a quantidade de documentos atualizados.
+    """
+    db = _database()
+    resultado = db.runs.update_many(
+        {"status": "running"},
+        {"$set": {
+            "status": "cancelled",
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "error": "Cancelada por script de manutenção.",
+        }},
+    )
+    return resultado.modified_count
+
+
 def registrar_log(run_id: int, chave_s3: str) -> None:
     """Grava a chave S3 (URI) do log de uma execução, assim que ele é
     enviado ao fim dela — a GUI busca o log ali (`obter_texto`), nunca do

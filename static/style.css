@@ -75,6 +75,19 @@ a:hover { color: #084a8c; text-decoration: underline; }
   font-size: 12px;
 }
 
+.update-banner {
+  margin: 12px 26px 0 26px;
+  padding: 8px 14px;
+  background: #e5f1fb;
+  border: 1px solid #0078d7;
+  color: #084a8c;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.update-banner .btn:first-of-type { margin-left: auto; }
+
 .columns {
   flex: 1;
   background: #fff;

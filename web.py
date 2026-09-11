@@ -7,6 +7,8 @@ execução, cancelamento cooperativo) fica aqui; a lógica de automação
 apresentação."""
 
 import logging
+import os
+import subprocess
 import re
 import threading
 import time
@@ -23,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 import modules.history as history
 import modules.storage as storage
 import modules.scheduler as scheduler_module
+import modules.updater as updater
 from pipeline import executar
 from modules.browser import SessaoElaw
 from modules.cancel import ExecucaoCancelada
@@ -109,6 +112,10 @@ class ServerState:
         # mesmo dela terminar) — permite o botão de download de cada
         # relatório aparecer assim que ele fica pronto, sem esperar o fim.
         self.live_downloads: dict[str, str] = {}
+        self.internet_available = False
+        self.internet_error = "Conectividade ainda não verificada."
+        self.release: Optional[updater.Release] = None
+        self.downloaded_installer: Optional[Path] = None
 
 
 state = ServerState()
@@ -220,6 +227,76 @@ def _start_run(usuario: Optional[str] = None) -> dict:
 
 # ------------------------------------------------------------------- rotas
 
+def _update_publico() -> dict:
+    with state.lock:
+        release = state.release
+        connected = state.internet_available
+        error = state.internet_error
+    current = updater.local_version()
+    available = bool(release and updater.is_newer(release.version, current))
+    return {"internet_available": connected, "internet_error": error if not connected else None,
+            "current_version": current, "available": available,
+            "version": release.version if available else None,
+            "release_notes": release.release_notes if available else "",
+            "mandatory": release.mandatory if available else False}
+
+
+def _check_update() -> dict:
+    try:
+        release = updater.check()
+    except updater.UpdateError as exc:
+        with state.lock:
+            state.internet_available = False
+            state.internet_error = str(exc)
+            state.release = None
+        return _update_publico()
+    with state.lock:
+        state.internet_available = True
+        state.internet_error = ""
+        state.release = release
+    return _update_publico()
+
+
+@app.get("/api/update")
+def api_update() -> dict:
+    return _update_publico()
+
+
+@app.post("/api/update/check")
+def api_update_check() -> dict:
+    return _check_update()
+
+
+@app.post("/api/update/download")
+def api_update_download() -> dict:
+    with state.lock:
+        release = state.release
+    if not release or not updater.is_newer(release.version, updater.local_version()):
+        raise HTTPException(409, "Não há atualização disponível.")
+    try:
+        installer = updater.download(release)
+    except updater.UpdateError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    with state.lock:
+        state.downloaded_installer = installer
+    return {"ok": True, "version": release.version}
+
+
+@app.post("/api/update/install")
+def api_update_install() -> dict:
+    with state.lock:
+        installer = state.downloaded_installer
+    if not installer or not installer.is_file():
+        raise HTTPException(409, "Baixe a atualização antes de instalar.")
+
+    def install_and_exit() -> None:
+        time.sleep(0.7)
+        subprocess.Popen([str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"])
+        os._exit(0)
+
+    threading.Thread(target=install_and_exit, daemon=True).start()
+    return {"ok": True}
+
 def iniciar_execucao(usuario: Optional[str] = None) -> dict:
     """Inicia execução. Usada por web.py e scheduler."""
     return _start_run(usuario=usuario)
@@ -227,7 +304,7 @@ def iniciar_execucao(usuario: Optional[str] = None) -> dict:
 
 @app.post("/api/executar")
 def api_executar() -> dict:
-    return _start_run()
+    return iniciar_execucao()
 
 
 @app.post("/api/cancelar")
@@ -592,7 +669,20 @@ def main() -> None:
 
     global scheduler
 
-    history.init_db()
+    # A consulta ao manifesto de atualizações é opcional. Sua
+    # indisponibilidade não deve impedir a extração dos relatórios.
+    update_state = _check_update()
+    if not update_state["internet_available"]:
+        logger.warning(
+            "Não foi possível consultar atualizações: %s. "
+            "As execuções continuam disponíveis.",
+            update_state["internet_error"],
+        )
+
+    try:
+        history.init_db()
+    except Exception as exc:
+        logger.error("Não foi possível inicializar o histórico: %s", exc)
 
     mongo_uri = dotenv_values(APP_DIR / ".env").get("MONGO_URI")
     if mongo_uri:

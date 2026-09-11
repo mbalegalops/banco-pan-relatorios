@@ -13,6 +13,10 @@
   const warning = el("warning");
   const statusBar = el("statusBar");
   const logBox = el("logBox");
+  const updateBanner = el("updateBanner");
+  const updateText = el("updateText");
+  const btnBaixarAtualizacao = el("btnBaixarAtualizacao");
+  const btnChecarAtualizacao = el("btnChecarAtualizacao");
 
   const emptyLabel = el("emptyLabel");
   const detailContent = el("detailContent");
@@ -44,6 +48,12 @@
   let running = false;
   let statusTimer = null;
 
+  fetchJSON("/api/update").then(renderUpdate).catch(() => {
+    warning.textContent = "Não foi possível verificar atualizações. Você ainda pode executar os relatórios.";
+    warning.hidden = false;
+    btnExecutar.disabled = false;
+  });
+
   // ------------------------------------------------------------- helpers
 
   function flash(msg, color) {
@@ -63,6 +73,40 @@
       return r.status === 204 ? null : r.json();
     });
   }
+
+  function renderUpdate(data) {
+    if (!data.internet_available) {
+      warning.textContent = "Não foi possível verificar atualizações. Você ainda pode executar os relatórios.";
+      warning.hidden = false;
+      btnExecutar.disabled = false;
+      updateBanner.hidden = true;
+      return;
+    }
+    warning.hidden = true;
+    btnExecutar.disabled = false;
+    if (!data.available) { updateBanner.hidden = true; return; }
+    updateText.textContent = `A versão ${data.version} está disponível.${data.release_notes ? " " + data.release_notes : ""}`;
+    updateBanner.hidden = false;
+  }
+
+  function checkUpdate() {
+    return fetchJSON("/api/update/check", { method: "POST" }).then(renderUpdate)
+      .catch((err) => flash(err.message, "#c0392b"));
+  }
+
+  btnChecarAtualizacao.addEventListener("click", checkUpdate);
+  btnBaixarAtualizacao.addEventListener("click", () => {
+    btnBaixarAtualizacao.disabled = true;
+    btnBaixarAtualizacao.textContent = "Baixando...";
+    fetchJSON("/api/update/download", { method: "POST" })
+      .then(() => fetchJSON("/api/update/install", { method: "POST" }))
+      .then(() => { updateText.textContent = "Instalando atualização…"; })
+      .catch((err) => {
+        flash(err.message, "#c0392b");
+        btnBaixarAtualizacao.disabled = false;
+        btnBaixarAtualizacao.textContent = "Baixar e atualizar";
+      });
+  });
 
   function escapeHtml(s) {
     return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));

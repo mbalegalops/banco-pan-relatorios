@@ -34,6 +34,10 @@ AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_REGION=...
 
+# Opcional: endpoint do manifesto de atualização para homologação.
+# Em produção, o padrão é o stable.json publicado diretamente no bucket S3.
+UPDATE_MANIFEST_URL=https://.../stable.json
+
 MONGO_URI=mongodb://usuario:senha@host:porta/relatorios?authSource=admin
 ```
 
@@ -58,3 +62,21 @@ Gera `dist/RelatoriosPan/` (via PyInstaller) usando `VERSION` como fonte
 única de versão. O instalador final (`Setup.exe`) é gerado a partir de
 `packaging/relatorios.iss` (Inno Setup), que depende da pasta `dist/` já
 existir.
+
+## Atualizações automáticas
+
+O aplicativo consulta o manifesto `stable.json` diretamente no S3 ao iniciar.
+Sem acesso à internet, ele mostra o aviso e bloqueia novas execuções. Quando
+há uma versão mais recente, o painel permite baixá-la, valida o SHA-256 e
+inicia silenciosamente o instalador após encerrar o aplicativo.
+
+Para publicar uma release após validar o build:
+
+```powershell
+./build.ps1 -Version 2.0.2 -Publish
+```
+
+Esse comando envia primeiro o instalador e só então publica o manifesto, para
+que os usuários nunca recebam uma referência a um arquivo inexistente. O
+prefixo `operacional/orquestra/banco-pan/relatorios/releases/` no S3 precisa
+ter leitura disponível aos computadores que usam o aplicativo.
